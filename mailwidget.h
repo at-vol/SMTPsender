@@ -19,6 +19,10 @@ public:
 protected slots:
     void errorHandler();
 
+    void validation(QString text);
+
+    void configChanged();
+
     void clicked_on_exitButton();
 
     void clicked_on_sendButton();

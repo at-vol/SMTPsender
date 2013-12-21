@@ -3,6 +3,7 @@
 MailWidget::MailWidget(QWidget *parent)
     : QWidget(parent)
 {
+    client = new SmtpClient;
     this->setWindowTitle(QString::fromUtf8("SMTP sender"));
     this->setFixedSize(600,500);
 
@@ -10,6 +11,8 @@ MailWidget::MailWidget(QWidget *parent)
     toLine = new QLineEdit(this);
     toLabel->setGeometry(50,50,toLabel->width(),20);
     toLine->setGeometry(50+toLabel->width(),50,this->width()-100-toLabel->width(),20);
+    toLine->setValidator(new QRegExpValidator(QRegExp("^[a-zA-Z\\d](?:[a-zA-Z\\d]?|[\\w\\-\\.]{0,62}[a-zA-Z\\d])@[\\w\\-\\.]+\\.[a-zA-Z]{2,6}$"),this));
+    connect(toLine,SIGNAL(textChanged(QString)),this,SLOT(validation(QString)));
 
     subjectLabel = new QLabel(QString::fromUtf8("Subject:"),this);
     subjectLine = new QLineEdit(this);
@@ -21,6 +24,7 @@ MailWidget::MailWidget(QWidget *parent)
 
     sendButton = new QPushButton(QString::fromUtf8("Send"),this);
     sendButton->move(50,this->height()-50);
+    sendButton->setEnabled(false);
     connect(sendButton,SIGNAL(clicked()),this,SLOT(clicked_on_sendButton()));
 
     configButton = new QPushButton(QString::fromUtf8("Config"),this);
@@ -34,13 +38,21 @@ MailWidget::MailWidget(QWidget *parent)
 
 MailWidget::~MailWidget()
 {
-
+    delete client;
 }
 
 void MailWidget::start()
 {
     cw = new ConfigWidget(&conf,this);
+    connect(cw,SIGNAL(destroyed()),this,SLOT(configChanged()));
     cw->show();
+}
+
+void MailWidget::configChanged()
+{
+    disconnect(cw,SIGNAL(destroyed()),this,SLOT(configChanged()));
+    client->setHost(conf.server);
+    client->setPort(conf.port);
 }
 
 void MailWidget::clicked_on_exitButton()
@@ -51,16 +63,14 @@ void MailWidget::clicked_on_exitButton()
 void MailWidget::clicked_on_configButton()
 {
     cw = new ConfigWidget(&conf,this);
+    connect(cw,SIGNAL(destroyed()),this,SLOT(configChanged()));
     cw->show();
 }
 
 void MailWidget::clicked_on_sendButton()
 {
     this->setEnabled(false);
-
-    client = new SmtpClient(conf.server,conf.port);
     connect(client,SIGNAL(smtpError(SmtpError)),this,SLOT(errorHandler()));
-
     SmtpMessage mail;
 
     mail.setName(conf.name);
@@ -77,7 +87,6 @@ void MailWidget::clicked_on_sendButton()
             {
                 client->quit();
                 disconnect(client,SIGNAL(smtpError(SmtpError)),this,SLOT(errorHandler()));
-                delete client;
                 success = new QMessageBox;
                 success->setWindowTitle("Success");
                 success->addButton("OK",success->AcceptRole);
@@ -88,6 +97,19 @@ void MailWidget::clicked_on_sendButton()
             }
         }
     }
+}
+
+void MailWidget::validation(QString text)
+{
+    QRegExpValidator val(QRegExp("^[a-zA-Z\\d](?:[a-zA-Z\\d]?|[\\w\\-\\.]{0,62}[a-zA-Z\\d])@[\\w\\-\\.]+\\.[a-zA-Z]{2,6}$"));
+    int pos = toLine->text().length();
+    if(val.validate(text,pos)==QValidator::Acceptable)
+    {
+        if(!sendButton->isEnabled())
+            sendButton->setEnabled(true);
+    }
+    else if(sendButton->isEnabled())
+            sendButton->setEnabled(false);
 }
 
 void MailWidget::errorHandler()
@@ -111,7 +133,8 @@ void MailWidget::clicked_on_okButton()
 {
     client->quit();
     disconnect(client,SIGNAL(smtpError(SmtpError)),this,SLOT(errorHandler()));
-    delete client;
+    client->blockSignals(false);
+    //delete client;
     Error->close();
     this->setEnabled(true);
     Error->deleteLater();

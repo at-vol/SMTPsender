@@ -23,9 +23,11 @@ public:
         ClientError
     };
 
-    bool sendMail(const SmtpMessage &mail);
+    void setHost(const QString host);
 
-    bool login();
+    void setPort(const quint16 port);
+
+    bool sendMail(const SmtpMessage &mail);
 
     bool login(const QString & user, const QString & password);
 

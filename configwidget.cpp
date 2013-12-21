@@ -10,37 +10,75 @@ ConfigWidget::ConfigWidget(CONFIG * c, QWidget *parent)
     this->setWindowTitle(QString::fromUtf8("SMTP configuration"));
     this->setFixedSize(400,250);
 
+    signalMapper = new QSignalMapper(this);
+
     smtpLabel = new QLabel(QString::fromUtf8("SMTP server"),this);
     smtpLine = new QLineEdit(this);
     smtpLabel->setGeometry(50,20,smtpLabel->width(),20);
     smtpLine->setGeometry(50+smtpLabel->width(),20,200,20);
+    smtpLine->setValidator(&valid.host);
+    connect(smtpLine,SIGNAL(textChanged(QString)),signalMapper,SLOT(map()));
+    signalMapper->setMapping(smtpLine,0);
 
     portLabel = new QLabel(QString::fromUtf8("SMTP port"),this);
-    portLine = new QLineEdit(this);
+    portBox = new QComboBox(this);
+    QStringList ports;
+    ports << "25" << "465" << "475" << "587" << "2525";
+    portBox->addItems(ports);
     portLabel->setGeometry(50,50,portLabel->width(),20);
-    portLine->setGeometry(50+portLabel->width(),50,200,20);
+    portBox->setGeometry(50+portLabel->width(),50,200,20);
 
     userLabel = new QLabel(QString::fromUtf8("Login: "),this);
     userLine  = new QLineEdit(this);
     userLabel->setGeometry(50,80,userLabel->width(),20);
     userLine->setGeometry(50+userLabel->width(),80,200,20);
+    userLine->setValidator(&valid.mail);
+    connect(userLine,SIGNAL(textChanged(QString)),signalMapper,SLOT(map()));
+    signalMapper->setMapping(userLine,1);
 
     passwdLabel = new QLabel(QString::fromUtf8("Password: "),this);
     passwdLine = new QLineEdit(this);
     passwdLabel->setGeometry(50,110,passwdLabel->width(),20);
     passwdLine->setGeometry(50+passwdLabel->width(),110,200,20);
+    passwdLine->setValidator(&valid.password);
+    passwdLine->setEchoMode(QLineEdit::Password);
+    connect(passwdLine,SIGNAL(textChanged(QString)),signalMapper,SLOT(map()));
+    signalMapper->setMapping(passwdLine,2);
 
     nameLabel = new QLabel(QString::fromUtf8("Name:"),this);
     nameLine = new QLineEdit(this);
     nameLabel->setGeometry(50,140,nameLabel->width(),20);
     nameLine->setGeometry(50+nameLabel->width(),140,200,20);
+    nameLine->setValidator(&valid.name);
+    connect(nameLine,SIGNAL(textChanged(QString)),signalMapper,SLOT(map()));
+    signalMapper->setMapping(nameLine,3);
+
+    connect(signalMapper,SIGNAL(mapped(int)),this,SLOT(validation(int)));
+
+    saveCheck = new QCheckBox(QString::fromUtf8("save as default"),this);
+    saveCheck->move(this->width()/2 - saveCheck->width()/2,170);
+
+    okButton = new QPushButton(QString::fromUtf8("OK"),this);
+    okButton->move(this->width()/2 - okButton->width() - 10,this->height()-40);
+    okButton->setAutoDefault(true);
+    connect(okButton,SIGNAL(clicked()),this,SLOT(clicked_on_okButton()));
+
+    exitButton = new QPushButton(QString::fromUtf8((Parent->isVisible())?"Cancel":"Exit"),this);
+    exitButton->move(this->width()/2 + 10,okButton->pos().y());
+    exitButton->setAutoDefault(true);
+    connect(exitButton,SIGNAL(clicked()),this,SLOT(clicked_on_exitButton()));
 
     config = new QFile("config");
 
     if(Parent->isVisible())
     {
         smtpLine->setText(conf->server);
-        portLine->setText(QString::number(conf->port));
+        for(int i=0;i<5;i++)
+            if(ports.at(i).toInt()==conf->port)
+            {
+                portBox->setCurrentIndex(i);
+                break;
+            }
         userLine->setText(conf->login);
         passwdLine->setText(conf->password);
         nameLine->setText(conf->name);
@@ -55,7 +93,7 @@ ConfigWidget::ConfigWidget(CONFIG * c, QWidget *parent)
         smtpLine->setText(QString(temp));
         temp = config->readLine();
         temp.chop(1);
-        portLine->setText(QString(temp));
+        portBox->setCurrentIndex(QString(temp).toInt());
         temp = config->readLine();
         temp.chop(1);
         userLine->setText(QString(temp));
@@ -68,22 +106,37 @@ ConfigWidget::ConfigWidget(CONFIG * c, QWidget *parent)
         config->close();
     }
 
-    saveCheck = new QCheckBox(QString::fromUtf8("save as default"),this);
-    saveCheck->move(this->width()/2 - saveCheck->width()/2,170);
-    saveCheck->setChecked(true);
-
-    okButton = new QPushButton(QString::fromUtf8("OK"),this);
-    okButton->move(this->width()/2 - okButton->width() - 10,this->height()-40);
-    connect(okButton,SIGNAL(clicked()),this,SLOT(clicked_on_okButton()));
-
-    exitButton = new QPushButton(QString::fromUtf8((Parent->isVisible())?"Cancel":"Exit"),this);
-    exitButton->move(this->width()/2 + 10,okButton->pos().y());
-    connect(exitButton,SIGNAL(clicked()),this,SLOT(clicked_on_exitButton()));
+    okButton->setFocus();
 }
 
 ConfigWidget::~ConfigWidget()
 {
     delete config;
+}
+
+void ConfigWidget::validation(int index)
+{
+    switch(index)
+    {
+    case 0:
+        valid.check(smtpLine,valid.host,valid.h);
+        break;
+    case 1:
+        valid.check(userLine,valid.mail,valid.m);
+        break;
+    case 2:
+        valid.check(passwdLine,valid.password,valid.p);
+        break;
+    case 3:
+        valid.check(nameLine,valid.name,valid.n);
+    }
+    if(valid.h && valid.m && valid.p && valid.p)
+    {
+        if(!okButton->isEnabled())
+            okButton->setEnabled(true);
+    }
+    else if(okButton->isEnabled())
+            okButton->setEnabled(false);
 }
 
 void ConfigWidget::clicked_on_exitButton()
@@ -96,7 +149,7 @@ void ConfigWidget::clicked_on_exitButton()
 void ConfigWidget::clicked_on_okButton()
 {
     conf->server = smtpLine->text();
-    conf->port = portLine->text().toInt();
+    conf->port = portBox->currentText().toInt();
     conf->login = userLine->text();
     conf->password = passwdLine->text();
     conf->name = nameLine->text();
@@ -105,7 +158,7 @@ void ConfigWidget::clicked_on_okButton()
     {
         config->open(QIODevice::WriteOnly);
         config->write(smtpLine->text().toUtf8()+"\n");
-        config->write(portLine->text().toUtf8()+"\n");
+        config->write(QString().number(portBox->currentIndex()).toUtf8()+"\n");
         config->write(userLine->text().toUtf8()+"\n");
         config->write(passwdLine->text().toUtf8()+"\n");
         config->write(nameLine->text().toUtf8()+"\n");

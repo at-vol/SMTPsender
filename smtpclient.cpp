@@ -2,15 +2,21 @@
 
 SmtpClient::SmtpClient(const QString & host, quint16 port) :
     name("localhost"),
-    connectionTimeout(5000),
-    responseTimeout(5000),
+    connectionTimeout(1000),
+    responseTimeout(1000),
     user("0"),
     password("0")
 {
+    socket = new QSslSocket(this);
+    connect(socket,SIGNAL(encrypted()),this,SLOT(ready()));
+    connect(socket,SIGNAL(connected()),this,SLOT(connected()));
+    connect(socket,SIGNAL(error(QAbstractSocket::SocketError)),this,SLOT(errorRecieved(QAbstractSocket::SocketError)));
+    connect(socket,SIGNAL(disconnected()),this,SLOT(disconnected()));
+
     this->host = host;
     this->port = port;
     file = new QFile("log.txt");
-    file->open(QIODevice::Append);
+    file->open(QIODevice::WriteOnly);
 }
 
 SmtpClient::~SmtpClient()
@@ -21,15 +27,18 @@ SmtpClient::~SmtpClient()
     delete socket;
 }
 
+void SmtpClient::setHost(const QString host)
+{
+    this->host = host;
+}
+
+void SmtpClient::setPort(const quint16 port)
+{
+    this->port = port;
+}
+
 bool SmtpClient::connectToHost()
 {
-    socket = new QSslSocket(this);
-
-    connect(socket,SIGNAL(encrypted()),this,SLOT(ready()));
-    connect(socket,SIGNAL(connected()),this,SLOT(connected()));
-    connect(socket,SIGNAL(error(QAbstractSocket::SocketError)),this,SLOT(errorRecieved(QAbstractSocket::SocketError)));
-    connect(socket,SIGNAL(disconnected()),this,SLOT(disconnected()));
-
     socket->connectToHostEncrypted(host,port);
 
     if(!socket->waitForConnected(connectionTimeout))
@@ -60,11 +69,6 @@ bool SmtpClient::connectToHost()
 
 
     return true;
-}
-
-bool SmtpClient::login()
-{
-    return login(user,password);
 }
 
 bool SmtpClient::login(const QString &user, const QString &password)
