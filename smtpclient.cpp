@@ -16,12 +16,11 @@ SmtpClient::SmtpClient(const QString & host, quint16 port) :
     this->host = host;
     this->port = port;
     file = new QFile("log.txt");
-    file->open(QIODevice::WriteOnly);
+    file->open(QIODevice::Append);
 }
 
 SmtpClient::~SmtpClient()
 {
-    file->write("END\n");
     file->close();
     delete file;
     delete socket;
@@ -39,6 +38,8 @@ void SmtpClient::setPort(const quint16 port)
 
 bool SmtpClient::connectToHost()
 {
+    file->write("---BEGIN---\n");
+
     socket->connectToHostEncrypted(host,port);
 
     if(!socket->waitForConnected(connectionTimeout))
@@ -50,18 +51,18 @@ bool SmtpClient::connectToHost()
     if(!waitForResponse())
         return false;
 
-    if(responseCode != 220)
+    if(responseCode != 220)//220 - <domain> Service ready
     {
         emit smtpError(ServerError);
         return false;
     }
 
-    sendMessage("EHLO " + name);
+    sendMessage(EHLO_C + name);
 
     if(!waitForResponse())
         return false;
 
-    if(responseCode != 250)
+    if(responseCode != 250)//250 - Requested mail action okay, completed
     {
         emit smtpError(ServerError);
         return false;
@@ -73,21 +74,21 @@ bool SmtpClient::connectToHost()
 
 bool SmtpClient::login(const QString &user, const QString &password)
 {
-    sendMessage("AUTH PLAIN " + QByteArray().append((char) 0).append(user).append((char) 0).append(password).toBase64());
+    sendMessage(AUTHP_C + QByteArray().append((char) 0).append(user).append((char) 0).append(password).toBase64());
 
     if(!waitForResponse())
         return false;
 
-    if(responseCode != 235)
+    if(responseCode != 235)//235 - Authentication succeeded
     {
-        sendMessage("AUTH LOGIN");
+        sendMessage(AUTHL_C);
 
         if(!waitForResponse())
             return false;
 
-        if(responseCode != 334)
+        if(responseCode != 334)//334 - Text part containing the [BASE64] encoded string
         {
-            emit smtpError(AuthenticationFaileError);
+            emit smtpError(AuthenticationFailedError);
             return false;
         }
 
@@ -98,7 +99,7 @@ bool SmtpClient::login(const QString &user, const QString &password)
 
         if(responseCode != 334)
         {
-            emit smtpError(AuthenticationFaileError);
+            emit smtpError(AuthenticationFailedError);
             return false;
         }
 
@@ -109,7 +110,7 @@ bool SmtpClient::login(const QString &user, const QString &password)
 
         if(responseCode != 235)
         {
-            emit smtpError(AuthenticationFaileError);
+            emit smtpError(AuthenticationFailedError);
             return false;
         }
     }
@@ -119,23 +120,26 @@ bool SmtpClient::login(const QString &user, const QString &password)
 
 bool SmtpClient::sendMail(const SmtpMessage &mail)
 {
-    sendMessage("MAIL FROM: <"+ mail.getFromAddress() + ">");
+    sendMessage(MAIL_C + "<"+ mail.getFromAddress() + ">");
 
     if(!waitForResponse())
         return false;
 
-    if(responseCode == 503)
+    /*When trying to sendmail without AUTH
+    if(responseCode == 530)//530 - Authentication required
     {
         emit smtpError(AuthorizationRequiredError);
         return false;
     }
+    */
+
     else if(responseCode != 250)
     {
         emit smtpError(ServerError);
         return false;
     }
 
-    sendMessage("RCPT TO: <" + mail.getToAddress() + ">");
+    sendMessage(RCPT_C + "<" + mail.getToAddress() + ">");
 
     if(!waitForResponse())
         return false;
@@ -146,12 +150,12 @@ bool SmtpClient::sendMail(const SmtpMessage &mail)
         return false;
     }
 
-    sendMessage("DATA");
+    sendMessage(DATA_C);
 
     if(!waitForResponse())
         return false;
 
-    if(responseCode != 354)
+    if(responseCode != 354)//354 - Start mail input; end with <CRLF>.<CRLF>
     {
         emit smtpError(ServerError);
         return false;
@@ -188,9 +192,9 @@ bool SmtpClient::waitForResponse()
 
             responseCode = responseText.left(3).toInt();
 
-            if(responseCode / 100 == 4)
+            if(responseCode / 100 == 4)//4xx - Server errors
                 emit smtpError(ServerError);
-            if(responseCode / 100 == 5)
+            if(responseCode / 100 == 5)//5xx - Client errors
                 emit smtpError(ClientError);
 
             if(responseText[3] == ' ') { return true; }
@@ -207,11 +211,15 @@ void SmtpClient::sendMessage(const QString &text)
 
 bool SmtpClient::quit()
 {
-    sendMessage("QUIT");
-    waitForResponse();
-    if(responseCode != 221)
-        return false;
+    if(socket->isEncrypted())
+    {
+        sendMessage(QUIT_C);
+        waitForResponse();
+        if(responseCode != 221)//221 - <domain> Service closing transmission channel
+            return false;
+    }
     socket->abort();
+    file->write("---END---\n\n");
     return true;
 }
 
@@ -222,8 +230,9 @@ void SmtpClient::connected()
 
 void SmtpClient::errorRecieved(QAbstractSocket::SocketError socketError)
 {
-    file->write("ERROR: " + socket->errorString().toUtf8() + "\n");
-    emit stringError("ERROR: " + socketError);
+    file->write("SocketError[" + QString().number(socketError).toUtf8() + "]: "
+                + socket->errorString().toUtf8() + "\n");
+    emit smtpError(SocketError);
 }
 
 void SmtpClient::ready()
@@ -234,9 +243,4 @@ void SmtpClient::ready()
 void SmtpClient::disconnected()
 {
     file->write("Disconnected.\n");
-}
-
-QString SmtpClient::getLastWords()
-{
-    return responseText;
 }

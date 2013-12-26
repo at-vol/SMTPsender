@@ -81,6 +81,8 @@ protected slots:
 
     void validation(int index);
 private:
+    enum LINES{HOST, LOGIN, PASSWORD, NAME};
+
     QWidget *Parent;
 
     QFile *config;

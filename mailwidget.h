@@ -14,10 +14,13 @@ class MailWidget : public QWidget
     
 public:
     MailWidget(QWidget *parent = 0);
+
     ~MailWidget();
+
     void start();
+
 protected slots:
-    void errorHandler();
+    void errorHandler(SmtpError e);
 
     void validation(QString text);
 
@@ -29,9 +32,10 @@ protected slots:
 
     void clicked_on_configButton();
 
-    void clicked_on_okButton();
 private:
     ConfigWidget *cw;
+
+    validExp valid;
 
     QPushButton *sendButton;
 
@@ -50,14 +54,6 @@ private:
     CONFIG conf;
 
     SmtpClient *client;
-
-    SmtpClient::SmtpError error;
-
-    QMessageBox *success;
-
-    QWidget *Error;
-    QLabel *errorLabel;
-    QPushButton *okButton;
 };
 
 #endif // WIDGET_H

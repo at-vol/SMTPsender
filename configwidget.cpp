@@ -1,8 +1,13 @@
 #include "configwidget.h"
 
+#define SMTP_MTA "25"  //mail transfer agent
+#define SMTP_SSL "465"   //SMTP with SSL encryption
+#define SMTP_MSA "587"   //mail submission agent
+#define SMTP_ALT "2525"   //alternative port
+
 ConfigWidget::ConfigWidget(CONFIG * c, QWidget *parent)
-    : conf(c),
-      Parent(parent)
+    : Parent(parent),
+      conf(c)
 {
     this->setWindowModality(Qt::ApplicationModal);
     this->setAttribute(Qt::WA_DeleteOnClose);
@@ -18,12 +23,12 @@ ConfigWidget::ConfigWidget(CONFIG * c, QWidget *parent)
     smtpLine->setGeometry(50+smtpLabel->width(),20,200,20);
     smtpLine->setValidator(&valid.host);
     connect(smtpLine,SIGNAL(textChanged(QString)),signalMapper,SLOT(map()));
-    signalMapper->setMapping(smtpLine,0);
+    signalMapper->setMapping(smtpLine,HOST);
 
     portLabel = new QLabel(QString::fromUtf8("SMTP port"),this);
     portBox = new QComboBox(this);
     QStringList ports;
-    ports << "25" << "465" << "475" << "587" << "2525";
+    ports << SMTP_MTA << SMTP_SSL << SMTP_MSA << SMTP_ALT;
     portBox->addItems(ports);
     portLabel->setGeometry(50,50,portLabel->width(),20);
     portBox->setGeometry(50+portLabel->width(),50,200,20);
@@ -34,7 +39,7 @@ ConfigWidget::ConfigWidget(CONFIG * c, QWidget *parent)
     userLine->setGeometry(50+userLabel->width(),80,200,20);
     userLine->setValidator(&valid.mail);
     connect(userLine,SIGNAL(textChanged(QString)),signalMapper,SLOT(map()));
-    signalMapper->setMapping(userLine,1);
+    signalMapper->setMapping(userLine,LOGIN);
 
     passwdLabel = new QLabel(QString::fromUtf8("Password: "),this);
     passwdLine = new QLineEdit(this);
@@ -43,7 +48,7 @@ ConfigWidget::ConfigWidget(CONFIG * c, QWidget *parent)
     passwdLine->setValidator(&valid.password);
     passwdLine->setEchoMode(QLineEdit::Password);
     connect(passwdLine,SIGNAL(textChanged(QString)),signalMapper,SLOT(map()));
-    signalMapper->setMapping(passwdLine,2);
+    signalMapper->setMapping(passwdLine,PASSWORD);
 
     nameLabel = new QLabel(QString::fromUtf8("Name:"),this);
     nameLine = new QLineEdit(this);
@@ -51,7 +56,7 @@ ConfigWidget::ConfigWidget(CONFIG * c, QWidget *parent)
     nameLine->setGeometry(50+nameLabel->width(),140,200,20);
     nameLine->setValidator(&valid.name);
     connect(nameLine,SIGNAL(textChanged(QString)),signalMapper,SLOT(map()));
-    signalMapper->setMapping(nameLine,3);
+    signalMapper->setMapping(nameLine,NAME);
 
     connect(signalMapper,SIGNAL(mapped(int)),this,SLOT(validation(int)));
 
@@ -118,16 +123,16 @@ void ConfigWidget::validation(int index)
 {
     switch(index)
     {
-    case 0:
+    case HOST:
         valid.check(smtpLine,valid.host,valid.h);
         break;
-    case 1:
+    case LOGIN:
         valid.check(userLine,valid.mail,valid.m);
         break;
-    case 2:
+    case PASSWORD:
         valid.check(passwdLine,valid.password,valid.p);
         break;
-    case 3:
+    case NAME:
         valid.check(nameLine,valid.name,valid.n);
     }
     if(valid.h && valid.m && valid.p && valid.p)

@@ -6,22 +6,31 @@
 #include <QFile>
 #include "smtpmessage.h"
 
+const QString EHLO_C = "EHLO ";
+const QString AUTHP_C = "AUTH PLAIN ";
+const QString AUTHL_C = "AUTH LOGIN";
+const QString MAIL_C = "MAIL FROM: ";
+const QString RCPT_C = "RCPT TO: ";
+const QString DATA_C = "DATA";
+const QString QUIT_C = "QUIT";
+
+enum SmtpError
+{
+    ConnectionTimeoutError,
+    ResponseTimeoutError,
+    AuthorizationRequiredError,
+    AuthenticationFailedError,
+    ServerError,
+    ClientError,
+    SocketError
+};
+
 class SmtpClient : public QObject
 {
     Q_OBJECT
 
 public:
     SmtpClient(const QString & host = "localhost", quint16 port = 25);
-
-    enum SmtpError
-    {
-        ConnectionTimeoutError,
-        ResponseTimeoutError,
-        AuthorizationRequiredError,
-        AuthenticationFaileError,
-        ServerError,
-        ClientError
-    };
 
     void setHost(const QString host);
 
@@ -35,15 +44,11 @@ public:
 
     bool quit();
 
-    QString getLastWords();
-
     ~SmtpClient();
 
 signals:
 
     void smtpError(SmtpError e);
-
-    void stringError(QString error);
 
 public slots:
 

@@ -11,13 +11,14 @@ MailWidget::MailWidget(QWidget *parent)
     toLine = new QLineEdit(this);
     toLabel->setGeometry(50,50,toLabel->width(),20);
     toLine->setGeometry(50+toLabel->width(),50,this->width()-100-toLabel->width(),20);
-    toLine->setValidator(new QRegExpValidator(QRegExp("^[a-zA-Z\\d](?:[a-zA-Z\\d]?|[\\w\\-\\.]{0,62}[a-zA-Z\\d])@[\\w\\-\\.]+\\.[a-zA-Z]{2,6}$"),this));
+    toLine->setValidator(&valid.mail);
     connect(toLine,SIGNAL(textChanged(QString)),this,SLOT(validation(QString)));
 
     subjectLabel = new QLabel(QString::fromUtf8("Subject:"),this);
     subjectLine = new QLineEdit(this);
     subjectLabel->setGeometry(50,80,subjectLabel->width(),20);
-    subjectLine->setGeometry(50+subjectLabel->width(),80,this->width()-100-subjectLabel->width(),20);
+    subjectLine->setGeometry(50+subjectLabel->width(),80,
+                             this->width()-100-subjectLabel->width(),20);
 
     messageText = new QTextEdit(this);
     messageText->setGeometry(50,110,this->width()-100,this->height()-180);
@@ -70,7 +71,8 @@ void MailWidget::clicked_on_configButton()
 void MailWidget::clicked_on_sendButton()
 {
     this->setEnabled(false);
-    connect(client,SIGNAL(smtpError(SmtpError)),this,SLOT(errorHandler()));
+    connect(client,SIGNAL(smtpError(SmtpError)),
+            this,SLOT(errorHandler(SmtpError)));
     SmtpMessage mail;
 
     mail.setName(conf.name);
@@ -86,13 +88,10 @@ void MailWidget::clicked_on_sendButton()
             if(client->sendMail(mail))
             {
                 client->quit();
-                disconnect(client,SIGNAL(smtpError(SmtpError)),this,SLOT(errorHandler()));
-                success = new QMessageBox;
-                success->setWindowTitle("Success");
-                success->addButton("OK",success->AcceptRole);
-                success->setText("Message was sent");
-                connect(success,SIGNAL(accepted()),success,SLOT(close()));
-                success->show();
+                disconnect(client,SIGNAL(smtpError(SmtpError)),
+                           this,SLOT(errorHandler(SmtpError)));
+                QMessageBox::information(this,tr("Success"),tr("Message has been sent"),
+                                         QMessageBox::Ok,QMessageBox::Ok);
                 this->setEnabled(true);
             }
         }
@@ -101,9 +100,8 @@ void MailWidget::clicked_on_sendButton()
 
 void MailWidget::validation(QString text)
 {
-    QRegExpValidator val(QRegExp("^[a-zA-Z\\d](?:[a-zA-Z\\d]?|[\\w\\-\\.]{0,62}[a-zA-Z\\d])@[\\w\\-\\.]+\\.[a-zA-Z]{2,6}$"));
     int pos = toLine->text().length();
-    if(val.validate(text,pos)==QValidator::Acceptable)
+    if(valid.mail.validate(text,pos)==QValidator::Acceptable)
     {
         if(!sendButton->isEnabled())
             sendButton->setEnabled(true);
@@ -112,30 +110,40 @@ void MailWidget::validation(QString text)
             sendButton->setEnabled(false);
 }
 
-void MailWidget::errorHandler()
+void MailWidget::errorHandler(SmtpError e)
 {
     client->blockSignals(true);
-    Error = new QWidget;
-    Error->setWindowTitle(QString::fromUtf8("ERROR"));
-    Error->setFixedSize(400,120);
-    errorLabel = new QLabel(Error);
-    errorLabel->setWordWrap(true);
-    errorLabel->setText(client->getLastWords());
-    errorLabel->setAlignment(Qt::AlignCenter);
-    errorLabel->setGeometry(20,10,Error->width() - 40, Error->height() - 40);
-    okButton = new QPushButton(QString::fromUtf8("OK"),Error);
-    okButton->move(Error->width()/2-40,Error->height() - 40);
-    connect(okButton,SIGNAL(clicked()),this,SLOT(clicked_on_okButton()));
-    Error->show();
-}
-
-void MailWidget::clicked_on_okButton()
-{
     client->quit();
-    disconnect(client,SIGNAL(smtpError(SmtpError)),this,SLOT(errorHandler()));
+    QString text;
+    switch(e)
+    {
+    case(SocketError):
+        text.append("Socket");
+        break;
+    case(ClientError):
+        text.append("Client");
+        break;
+    case(ServerError):
+        text.append("Server");
+        break;
+    case(ConnectionTimeoutError):
+        text.append("Connection timeout");
+        break;
+    case(ResponseTimeoutError):
+        text.append("Response timeout");
+        break;
+    case(AuthorizationRequiredError):
+        text.append("Authorization required");
+        break;
+    case(AuthenticationFailedError):
+        text.append("Authentication failed");
+        break;
+    default:
+        text.append("Unknown");
+    }
+    text.append(" error.");
+    QMessageBox::critical(this,tr("Error"),text,QMessageBox::Ok,QMessageBox::Ok);
     client->blockSignals(false);
-    //delete client;
-    Error->close();
+    disconnect(client,SIGNAL(smtpError(SmtpError)),this,SLOT(errorHandler(SmtpError)));
     this->setEnabled(true);
-    Error->deleteLater();
 }
