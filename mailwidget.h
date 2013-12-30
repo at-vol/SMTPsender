@@ -22,8 +22,6 @@ public:
 protected slots:
     void errorHandler(SmtpError e);
 
-    void validation(QString text);
-
     void configChanged();
 
     void clicked_on_exitButton();
@@ -33,15 +31,17 @@ protected slots:
     void clicked_on_configButton();
 
 private:
-    ConfigWidget *cw;
+    enum layoutRows {MAIL_TO, SUBJECT, MESSAGE, BUTTONS};
 
-    validExp valid;
+    ConfigWidget *cw;
 
     QPushButton *sendButton;
 
     QPushButton *exitButton;
 
     QPushButton *configButton;
+
+    QLabel *warningLabel;
 
     QLabel *toLabel;
     QLineEdit *toLine;

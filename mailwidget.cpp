@@ -1,40 +1,59 @@
+#include <QGridLayout>
+#include <QHBoxLayout>
 #include "mailwidget.h"
 
 MailWidget::MailWidget(QWidget *parent)
     : QWidget(parent)
 {
     client = new SmtpClient;
-    this->setWindowTitle(QString::fromUtf8("SMTP sender"));
-    this->setFixedSize(600,500);
+    setWindowTitle(QString::fromUtf8("SMTP sender"));
+    setMinimumSize(400,400);
+
+    QGridLayout *mainlayout = new QGridLayout;
 
     toLabel = new QLabel(QString::fromUtf8("To:"),this);
     toLine = new QLineEdit(this);
-    toLabel->setGeometry(50,50,toLabel->width(),20);
-    toLine->setGeometry(50+toLabel->width(),50,this->width()-100-toLabel->width(),20);
-    toLine->setValidator(&valid.mail);
-    connect(toLine,SIGNAL(textChanged(QString)),this,SLOT(validation(QString)));
+    mainlayout->addWidget(toLabel,MAIL_TO,0);
+    mainlayout->addWidget(toLine,MAIL_TO,1,1,2);
+    toLine->setValidator(new QRegExpValidator(QRegExp("^[a-zA-Z\\d](?:[a-zA-Z\\d]?|[\\w\\-\\.]{0,62}[a-zA-Z\\d])"
+                                                      "@[a-zA-Z\\d](?:[a-zA-Z\\d]?|[\\w\\-\\.]{0,180}[a-zA-Z\\d])"
+                                                      "\\.[a-zA-Z]{2,6}$")));
 
     subjectLabel = new QLabel(QString::fromUtf8("Subject:"),this);
     subjectLine = new QLineEdit(this);
-    subjectLabel->setGeometry(50,80,subjectLabel->width(),20);
-    subjectLine->setGeometry(50+subjectLabel->width(),80,
-                             this->width()-100-subjectLabel->width(),20);
+    mainlayout->addWidget(subjectLabel,SUBJECT,0);
+    mainlayout->addWidget(subjectLine,SUBJECT,1,1,2);
 
     messageText = new QTextEdit(this);
-    messageText->setGeometry(50,110,this->width()-100,this->height()-180);
+    mainlayout->addWidget(messageText,MESSAGE,0,1,3);
+
+    QHBoxLayout *boxlayout = new QHBoxLayout;
 
     sendButton = new QPushButton(QString::fromUtf8("Send"),this);
-    sendButton->move(50,this->height()-50);
-    sendButton->setEnabled(false);
+    boxlayout->addWidget(sendButton);
     connect(sendButton,SIGNAL(clicked()),this,SLOT(clicked_on_sendButton()));
 
     configButton = new QPushButton(QString::fromUtf8("Config"),this);
-    configButton->move(70 + sendButton->width(),sendButton->pos().y());
+    boxlayout->addWidget(configButton);
     connect(configButton,SIGNAL(clicked()),this,SLOT(clicked_on_configButton()));
 
+    mainlayout->addLayout(boxlayout,BUTTONS,0,1,2,Qt::AlignLeft);
+
+    boxlayout = new QHBoxLayout;
+
+    warningLabel = new QLabel(tr(""),this);
+    boxlayout->addWidget(warningLabel,10,Qt::AlignLeft);
+
     exitButton = new QPushButton(QString::fromUtf8("Exit"),this);
-    exitButton->move(this->width() - 50 - exitButton->width(),sendButton->pos().y());
+    boxlayout->addWidget(exitButton,0,Qt::AlignRight);
     connect(exitButton,SIGNAL(clicked()),this,SLOT(clicked_on_exitButton()));
+
+    mainlayout->addLayout(boxlayout,BUTTONS,2);
+    mainlayout->setColumnStretch(0,1);
+    mainlayout->setColumnStretch(1,10);
+    mainlayout->setColumnStretch(2,10);
+
+    setLayout(mainlayout);
 }
 
 MailWidget::~MailWidget()
@@ -70,6 +89,38 @@ void MailWidget::clicked_on_configButton()
 
 void MailWidget::clicked_on_sendButton()
 {
+    int pos = toLine->text().length();
+    QString text = toLine->text();
+    if(toLine->validator()->validate(text,pos)!=QValidator::Acceptable)
+    {
+        warningLabel->setStyleSheet("QLabel{border: 2px solid red;"
+                                    "border-radius: 5px;}");
+        warningLabel->setText(tr("Wrong e-mail"));
+        warningLabel->setVisible(true);
+        return;
+    }
+    else warningLabel->setVisible(false);
+
+    if(subjectLine->text().isEmpty())
+    {
+        int ret = QMessageBox::question(this,tr("Empty subject"),
+                                        tr("The subject is empty. Continue?"),
+                                        QMessageBox::Yes|QMessageBox::No,
+                                        QMessageBox::No);
+        if(ret==QMessageBox::No)
+            return;
+    }
+
+    if(messageText->toPlainText().isEmpty())
+    {
+        int ret = QMessageBox::question(this,tr("Empty body"),
+                                        tr("Your message have no text. Continue?"),
+                                        QMessageBox::Yes|QMessageBox::No,
+                                        QMessageBox::No);
+        if(ret==QMessageBox::No)
+            return;
+    }
+
     this->setEnabled(false);
     connect(client,SIGNAL(smtpError(SmtpError)),
             this,SLOT(errorHandler(SmtpError)));
@@ -96,18 +147,6 @@ void MailWidget::clicked_on_sendButton()
             }
         }
     }
-}
-
-void MailWidget::validation(QString text)
-{
-    int pos = toLine->text().length();
-    if(valid.mail.validate(text,pos)==QValidator::Acceptable)
-    {
-        if(!sendButton->isEnabled())
-            sendButton->setEnabled(true);
-    }
-    else if(sendButton->isEnabled())
-            sendButton->setEnabled(false);
 }
 
 void MailWidget::errorHandler(SmtpError e)
