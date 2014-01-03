@@ -7,6 +7,11 @@
 #define SMTP_MSA "587"   //mail submission agent
 #define SMTP_ALT "2525"   //alternative port
 
+//encryption types
+#define NONE_E "NONE"
+#define STARTTLS_E "STARTTLS"
+#define SSL_E "SSL"
+
 ConfigWidget::ConfigWidget(CONFIG * c, QWidget *parent)
     : Parent(parent),
       conf(c)
@@ -15,7 +20,7 @@ ConfigWidget::ConfigWidget(CONFIG * c, QWidget *parent)
     setAttribute(Qt::WA_DeleteOnClose);
 
     setWindowTitle(tr("SMTP configuration"));
-    setFixedSize(370,250);
+    setFixedSize(370,280);
 
     QGridLayout *mainlayout = new QGridLayout;
 
@@ -28,28 +33,36 @@ ConfigWidget::ConfigWidget(CONFIG * c, QWidget *parent)
 
     portLabel = new QLabel(QString::fromUtf8("SMTP port"),this);
     portBox = new QComboBox(this);
-    QStringList ports;
-    ports << SMTP_MTA << SMTP_SSL << SMTP_MSA << SMTP_ALT;
-    portBox->addItems(ports);
+    QStringList list;
+    list << SMTP_MTA << SMTP_SSL << SMTP_MSA << SMTP_ALT;
+    portBox->addItems(list);
     mainlayout->addWidget(portLabel,PORT,0);
     mainlayout->addWidget(portBox,PORT,1);
 
-    userLabel = new QLabel(QString::fromUtf8("Login: "),this);
+    encryptionLabel = new QLabel(QString::fromUtf8("Encryption"),this);
+    encryptionBox = new QComboBox(this);
+    list.clear();
+    list << NONE_E << STARTTLS_E << SSL_E;
+    encryptionBox->addItems(list);
+    mainlayout->addWidget(encryptionLabel,ENCRYPTION,0);
+    mainlayout->addWidget(encryptionBox,ENCRYPTION,1);
+
+    userLabel = new QLabel(QString::fromUtf8("Login"),this);
     userLine  = new QLineEdit(this);
     mainlayout->addWidget(userLabel,LOGIN,0);
     mainlayout->addWidget(userLine,LOGIN,1);
-    userLine->setValidator(new QRegExpValidator(QRegExp("^[a-zA-Z\\d](?:[a-zA-Z\\d]?|[\\w\\-\\.]{0,62}[a-zA-Z\\d])"
+    userLine->setValidator(new QRegExpValidator(QRegExp("^(?:([a-zA-Z\\d](?:[a-zA-Z\\d]?|[\\w\\-\\.]{0,62}[a-zA-Z\\d])"
                                                         "@[a-zA-Z\\d](?:[a-zA-Z\\d]?|[\\w\\-\\.]{0,180}[a-zA-Z\\d])"
-                                                        "\\.[a-zA-Z]{2,6}$")));
+                                                        "\\.[a-zA-Z]{2,6})|(\\w{1,4}\\\\[\\w\\-\\.]{,62}))$")));
 
-    passwdLabel = new QLabel(QString::fromUtf8("Password: "),this);
+    passwdLabel = new QLabel(QString::fromUtf8("Password"),this);
     passwdLine = new QLineEdit(this);
     mainlayout->addWidget(passwdLabel,PASSWORD,0);
     mainlayout->addWidget(passwdLine,PASSWORD,1);
     passwdLine->setValidator(new QRegExpValidator(QRegExp("^\\S+$")));
     passwdLine->setEchoMode(QLineEdit::Password);
 
-    nameLabel = new QLabel(QString::fromUtf8("Name:"),this);
+    nameLabel = new QLabel(QString::fromUtf8("Name"),this);
     nameLine = new QLineEdit(this);
     mainlayout->addWidget(nameLabel,NAME,0);
     mainlayout->addWidget(nameLine,NAME,1);
@@ -82,12 +95,13 @@ ConfigWidget::ConfigWidget(CONFIG * c, QWidget *parent)
     if(Parent->isVisible())
     {
         serverLine->setText(conf->server);
-        for(int i=0;i<5;i++)
-            if(ports.at(i).toInt()==conf->port)
+        for(int i=0;i<portBox->count();i++)
+            if(portBox->itemText(i).toInt()==conf->port)
             {
                 portBox->setCurrentIndex(i);
                 break;
             }
+        encryptionBox->setCurrentIndex(conf->encryption);
         userLine->setText(conf->login);
         passwdLine->setText(conf->password);
         nameLine->setText(conf->name);
@@ -103,6 +117,9 @@ ConfigWidget::ConfigWidget(CONFIG * c, QWidget *parent)
         temp = config->readLine();
         temp.chop(1);
         portBox->setCurrentIndex(QString(temp).toInt());
+        temp = config->readLine();
+        temp.chop(1);
+        encryptionBox->setCurrentIndex(QString(temp).toInt());
         temp = config->readLine();
         temp.chop(1);
         userLine->setText(QString(temp));
@@ -171,6 +188,7 @@ void ConfigWidget::clicked_on_okButton()
 
     conf->server = serverLine->text();
     conf->port = portBox->currentText().toInt();
+    conf->encryption = encryptionBox->currentIndex();
     conf->login = userLine->text();
     conf->password = passwdLine->text();
     conf->name = nameLine->text();
@@ -180,6 +198,7 @@ void ConfigWidget::clicked_on_okButton()
         config->open(QIODevice::WriteOnly);
         config->write(serverLine->text().toUtf8()+"\n");
         config->write(QString().number(portBox->currentIndex()).toUtf8()+"\n");
+        config->write(QString().number(encryptionBox->currentIndex()).toUtf8()+"\n");
         config->write(userLine->text().toUtf8()+"\n");
         config->write(passwdLine->text().toUtf8()+"\n");
         config->write(nameLine->text().toUtf8()+"\n");

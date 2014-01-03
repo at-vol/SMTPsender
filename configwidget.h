@@ -15,6 +15,7 @@ struct CONFIG
 {
     QString server;
     quint16 port;
+    quint8 encryption;
     QString login;
     QString password;
     QString name;
@@ -32,7 +33,7 @@ protected slots:
 
     void clicked_on_okButton();
 private:
-    enum layoutRows{SERVER, PORT, LOGIN, PASSWORD, NAME, SAVE, WARNING, BUTTONS};
+    enum layoutRows{SERVER, PORT, ENCRYPTION, LOGIN, PASSWORD, NAME, SAVE, WARNING, BUTTONS};
 
     bool checkValidation(const QLineEdit *line);
 
@@ -49,6 +50,9 @@ private:
 
     QLabel *portLabel;
     QComboBox *portBox;
+
+    QLabel *encryptionLabel;
+    QComboBox *encryptionBox;
 
     QLabel *userLabel;
     QLineEdit *userLine;

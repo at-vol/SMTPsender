@@ -7,6 +7,7 @@
 #include "smtpmessage.h"
 
 const QString EHLO_C = "EHLO ";
+const QString STARTTLS_C = "STARTTLS";
 const QString AUTHP_C = "AUTH PLAIN ";
 const QString AUTHL_C = "AUTH LOGIN";
 const QString MAIL_C = "MAIL FROM: ";
@@ -30,11 +31,15 @@ class SmtpClient : public QObject
     Q_OBJECT
 
 public:
-    SmtpClient(const QString & host = "localhost", quint16 port = 25);
+    enum EncryptionType{NONE, STARTTLS, SSL};
+
+    SmtpClient(const QString & host = "localhost", quint16 port = 25, EncryptionType encryption = SSL);
 
     void setHost(const QString host);
 
     void setPort(const quint16 port);
+
+    EncryptionType getEncryptionType() const;
 
     bool sendMail(const SmtpMessage &mail);
 
@@ -61,10 +66,12 @@ public slots:
     void disconnected();
 
 protected:
+    void setEncryptionType(EncryptionType et);
 
     QString name;
     QString host;
     quint16 port;
+    EncryptionType encryptionType;
 
     quint16 connectionTimeout;
     quint16 responseTimeout;
@@ -79,8 +86,10 @@ protected:
     quint16 responseCode;
     QString responseText;
 
-    QSslSocket *socket;
+    QTcpSocket *socket;
     QFile *file;
+
+    void writeLog(const char *data);
 };
 
 #endif // SMTP_H

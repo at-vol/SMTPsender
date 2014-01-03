@@ -71,8 +71,16 @@ void MailWidget::start()
 void MailWidget::configChanged()
 {
     disconnect(cw,SIGNAL(destroyed()),this,SLOT(configChanged()));
-    client->setHost(conf.server);
-    client->setPort(conf.port);
+    if(client->getEncryptionType()!=conf.encryption)
+    {
+        delete client;
+        client = new SmtpClient(conf.server, conf.port, SmtpClient::EncryptionType(conf.encryption));
+    }
+    else
+    {
+        client->setHost(conf.server);
+        client->setPort(conf.port);
+    }
 }
 
 void MailWidget::clicked_on_exitButton()
