@@ -7,10 +7,13 @@
 #define SMTP_MSA "587"   //mail submission agent
 #define SMTP_ALT "2525"   //alternative port
 
+#define IMAP_STD "143"
+#define IMAP_SSL "993"
+
 //encryption types
 #define NONE_E "NONE"
 #define STARTTLS_E "STARTTLS"
-#define SSL_E "SSL"
+#define SSL_E "SSL/TLS"
 
 ConfigWidget::ConfigWidget(CONFIG * c, QWidget *parent)
     : Parent(parent),
@@ -19,25 +22,28 @@ ConfigWidget::ConfigWidget(CONFIG * c, QWidget *parent)
     setWindowModality(Qt::ApplicationModal);
     setAttribute(Qt::WA_DeleteOnClose);
 
-    setWindowTitle(tr("SMTP configuration"));
+    setWindowTitle(tr("Configuration"));
     setFixedSize(370,280);
+    QRect frect = frameGeometry();
+    frect.moveCenter(Parent->frameGeometry().center());
+    move(frect.topLeft());
 
     QGridLayout *mainlayout = new QGridLayout;
 
-    serverLabel = new QLabel(QString::fromUtf8("SMTP server"),this);
-    serverLine = new QLineEdit(this);
-    mainlayout->addWidget(serverLabel,SERVER,0);
-    mainlayout->addWidget(serverLine,SERVER,1);
-    serverLine->setValidator(new QRegExpValidator(QRegExp("^[a-zA-Z\\d](?:[a-zA-Z\\d]?|[\\w\\-\\.]{0,254}[a-zA-Z\\d])"
+    smtpServerLabel = new QLabel(QString::fromUtf8("SMTP server"),this);
+    smtpServerLine = new QLineEdit(this);
+    mainlayout->addWidget(smtpServerLabel,SMTPSERVER,0);
+    mainlayout->addWidget(smtpServerLine,SMTPSERVER,1);
+    smtpServerLine->setValidator(new QRegExpValidator(QRegExp("^[a-zA-Z\\d](?:[a-zA-Z\\d]?|[\\w\\-\\.]{0,254}[a-zA-Z\\d])"
                                                         "\\.[a-zA-Z]{2,6}$")));
 
-    portLabel = new QLabel(QString::fromUtf8("SMTP port"),this);
-    portBox = new QComboBox(this);
+    smtpPortLabel = new QLabel(QString::fromUtf8("SMTP port"),this);
+    smtpPortBox = new QComboBox(this);
     QStringList list;
     list << SMTP_MTA << SMTP_SSL << SMTP_MSA << SMTP_ALT;
-    portBox->addItems(list);
-    mainlayout->addWidget(portLabel,PORT,0);
-    mainlayout->addWidget(portBox,PORT,1);
+    smtpPortBox->addItems(list);
+    mainlayout->addWidget(smtpPortLabel,SMTPPORT,0);
+    mainlayout->addWidget(smtpPortBox,SMTPPORT,1);
 
     encryptionLabel = new QLabel(QString::fromUtf8("Encryption"),this);
     encryptionBox = new QComboBox(this);
@@ -90,55 +96,24 @@ ConfigWidget::ConfigWidget(CONFIG * c, QWidget *parent)
     mainlayout->addLayout(buttonsbox,BUTTONS,0,1,2);
     setLayout(mainlayout);
 
-    config = new QFile("config");
-
-    if(Parent->isVisible())
-    {
-        serverLine->setText(conf->server);
-        for(int i=0;i<portBox->count();i++)
-            if(portBox->itemText(i).toInt()==conf->port)
-            {
-                portBox->setCurrentIndex(i);
-                break;
-            }
-        encryptionBox->setCurrentIndex(conf->encryption);
-        userLine->setText(conf->login);
-        passwdLine->setText(conf->password);
-        nameLine->setText(conf->name);
-
-    }
-    else if(config->exists())
-    {
-        config->open(QIODevice::ReadOnly);
-        QByteArray temp;
-        temp = config->readLine();
-        temp.chop(1);
-        serverLine->setText(QString(temp));
-        temp = config->readLine();
-        temp.chop(1);
-        portBox->setCurrentIndex(QString(temp).toInt());
-        temp = config->readLine();
-        temp.chop(1);
-        encryptionBox->setCurrentIndex(QString(temp).toInt());
-        temp = config->readLine();
-        temp.chop(1);
-        userLine->setText(QString(temp));
-        temp = config->readLine();
-        temp.chop(1);
-        passwdLine->setText(QString(temp));
-        temp = config->readLine();
-        temp.chop(1);
-        nameLine->setText(QString(temp));
-        config->close();
-    }
+    smtpServerLine->setText(conf->smtpServer);
+    for(int i=0;i<smtpPortBox->count();i++)
+        if(smtpPortBox->itemText(i).toInt()==conf->smtpPort)
+        {
+            smtpPortBox->setCurrentIndex(i);
+            break;
+        }
+    encryptionBox->setCurrentIndex(conf->encryption);
+    userLine->setText(conf->login);
+    passwdLine->setText(conf->password);
+    nameLine->setText(conf->name);
 }
 
 ConfigWidget::~ConfigWidget()
 {
-    delete config;
 }
 
-bool ConfigWidget::checkValidation(const QLineEdit *line)
+bool ConfigWidget::checkValidation(const QLineEdit *line) const
 {
     int pos = line->text().length();
     QString text = line->text();
@@ -158,7 +133,7 @@ void ConfigWidget::clicked_on_okButton()
 {
     QLineEdit *lines[4];
 
-    lines[0] = serverLine;
+    lines[0] = smtpServerLine;
     lines[1] = userLine;
     lines[2] = passwdLine;
     lines[3] = nameLine;
@@ -186,8 +161,8 @@ void ConfigWidget::clicked_on_okButton()
             return;
         }
 
-    conf->server = serverLine->text();
-    conf->port = portBox->currentText().toInt();
+    conf->smtpServer = smtpServerLine->text();
+    conf->smtpPort = smtpPortBox->currentText().toInt();
     conf->encryption = encryptionBox->currentIndex();
     conf->login = userLine->text();
     conf->password = passwdLine->text();
@@ -195,18 +170,19 @@ void ConfigWidget::clicked_on_okButton()
 
     if(saveCheck->isChecked())
     {
+        QFile *config = new QFile("config");
         config->open(QIODevice::WriteOnly);
-        config->write(serverLine->text().toUtf8()+"\n");
-        config->write(QString().number(portBox->currentIndex()).toUtf8()+"\n");
-        config->write(QString().number(encryptionBox->currentIndex()).toUtf8()+"\n");
-        config->write(userLine->text().toUtf8()+"\n");
-        config->write(passwdLine->text().toUtf8()+"\n");
-        config->write(nameLine->text().toUtf8()+"\n");
+        config->write(conf->smtpServer.toUtf8()+"\n");
+        config->write(QString().number(conf->smtpPort).toUtf8()+"\n");
+        config->write(QString().number(conf->encryption).toUtf8()+"\n");
+        config->write(conf->login.toUtf8()+"\n");
+        config->write(conf->password.toUtf8()+"\n");
+        config->write(conf->name.toUtf8()+"\n");
         config->close();
+        delete config;
     }
 
     if(!Parent->isVisible())
         Parent->show();
     this->close();
 }
-

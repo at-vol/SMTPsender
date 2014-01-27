@@ -65,8 +65,8 @@ QString SmtpMessage::getMail() const
 {
     QString message;
 
-    message = "To: <" + this->toAddress + ">\n";
-    message.append("From: \""+ this->name + "\" <" + this->fromAddress + ">\n");
+    message = "From: "+ this->name + " <" + this->fromAddress + ">\n";
+    message.append("To: <" + this->toAddress + ">\n");
     message.append("Subject: " + this->subject + "\n");
     message.append(this->text);
     message.replace( QString::fromLatin1( "\n" ), QString::fromLatin1( "\r\n" ) );

@@ -21,9 +21,12 @@ enum SmtpError
     ResponseTimeoutError,
     AuthorizationRequiredError,
     AuthenticationFailedError,
+    InsecureConnectionError,
+    UntrustedCertificateError,
     ServerError,
     ClientError,
-    SocketError
+    SocketError,
+    SslHandshakeError
 };
 
 class SmtpClient : public QObject
@@ -38,6 +41,12 @@ public:
     void setHost(const QString host);
 
     void setPort(const quint16 port);
+
+    void changeEncryptionType(EncryptionType e);
+
+    void setConnectionTimeout(quint16 time);
+
+    void setIgnoreSslErrors(bool ignore);
 
     EncryptionType getEncryptionType() const;
 
@@ -63,6 +72,8 @@ public slots:
 
     void errorRecieved(QAbstractSocket::SocketError);
 
+    void errorRecieved(const QList<QSslError>& sslErrors);
+
     void disconnected();
 
 protected:
@@ -72,6 +83,7 @@ protected:
     QString host;
     quint16 port;
     EncryptionType encryptionType;
+    bool ignoreSslErrors;
 
     quint16 connectionTimeout;
     quint16 responseTimeout;

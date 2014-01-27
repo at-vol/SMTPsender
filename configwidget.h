@@ -9,12 +9,11 @@
 #include <QCheckBox>
 #include <QFile>
 #include <QRegExpValidator>
-#include <QSignalMapper>
 
 struct CONFIG
 {
-    QString server;
-    quint16 port;
+    QString smtpServer;
+    quint16 smtpPort;
     quint8 encryption;
     QString login;
     QString password;
@@ -33,23 +32,21 @@ protected slots:
 
     void clicked_on_okButton();
 private:
-    enum layoutRows{SERVER, PORT, ENCRYPTION, LOGIN, PASSWORD, NAME, SAVE, WARNING, BUTTONS};
+    enum layoutRows{SMTPSERVER, SMTPPORT, ENCRYPTION, LOGIN, PASSWORD, NAME, SAVE, WARNING, BUTTONS};
 
-    bool checkValidation(const QLineEdit *line);
+    bool checkValidation(const QLineEdit *line) const;
 
     QWidget *Parent;
-
-    QFile *config;
 
     QPushButton *okButton;
 
     QPushButton *exitButton;
 
-    QLabel *serverLabel;
-    QLineEdit *serverLine;
+    QLabel *smtpServerLabel;
+    QLineEdit *smtpServerLine;
 
-    QLabel *portLabel;
-    QComboBox *portBox;
+    QLabel *smtpPortLabel;
+    QComboBox *smtpPortBox;
 
     QLabel *encryptionLabel;
     QComboBox *encryptionBox;

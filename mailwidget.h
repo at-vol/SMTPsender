@@ -18,28 +18,24 @@ public:
     ~MailWidget();
 
     void start();
-
 protected slots:
     void errorHandler(SmtpError e);
 
     void configChanged();
 
+    void clicked_on_configButton();
+
     void clicked_on_exitButton();
 
     void clicked_on_sendButton();
-
-    void clicked_on_configButton();
-
 private:
     enum layoutRows {MAIL_TO, SUBJECT, MESSAGE, BUTTONS};
 
-    ConfigWidget *cw;
+    QPushButton *configButton;
 
     QPushButton *sendButton;
 
     QPushButton *exitButton;
-
-    QPushButton *configButton;
 
     QLabel *warningLabel;
 
@@ -51,7 +47,11 @@ private:
 
     QTextEdit *messageText;
 
-    CONFIG conf;
+    QFile *config;
+
+    CONFIG *conf;
+
+    ConfigWidget *cw;
 
     SmtpClient *client;
 };

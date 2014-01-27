@@ -2,11 +2,17 @@
 
 SmtpClient::SmtpClient(const QString & host, quint16 port, EncryptionType encryption) :
     name("localhost"),
+    ignoreSslErrors(false),
     connectionTimeout(1000),
     responseTimeout(1000),
     user("0"),
     password("0")
 {
+    // Add your own CA cerificate exceptions
+    QSslSocket::addDefaultCaCertificates("certs/*",QSsl::Pem,QRegExp::WildcardUnix);
+
+    file = new QFile("log.txt");
+
     setEncryptionType(encryption);
 
     connect(socket,SIGNAL(connected()),this,SLOT(connected()));
@@ -15,7 +21,6 @@ SmtpClient::SmtpClient(const QString & host, quint16 port, EncryptionType encryp
 
     this->host = host;
     this->port = port;
-    file = new QFile("log.txt");
 }
 
 SmtpClient::~SmtpClient()
@@ -34,6 +39,21 @@ void SmtpClient::setPort(const quint16 port)
     this->port = port;
 }
 
+void SmtpClient::changeEncryptionType(SmtpClient::EncryptionType e)
+{
+    this->encryptionType = e;
+}
+
+void SmtpClient::setConnectionTimeout(quint16 time)
+{
+    this->connectionTimeout = time;
+}
+
+void SmtpClient::setIgnoreSslErrors(bool ignore)
+{
+    this->ignoreSslErrors = ignore;
+}
+
 SmtpClient::EncryptionType SmtpClient::getEncryptionType() const
 {
     return encryptionType;
@@ -43,30 +63,98 @@ bool SmtpClient::connectToHost()
 {
     writeLog("---BEGIN---\n");
 
-    switch(encryptionType)
+    if(encryptionType == NONE)
     {
-    case NONE:
-    case STARTTLS:
         socket->connectToHost(host,port);
-        break;
-    case SSL:
-        ((QSslSocket *)socket)->connectToHostEncrypted(host,port);
+        if(!socket->waitForConnected(connectionTimeout))
+        {
+            emit smtpError(ConnectionTimeoutError);
+            return false;
+        }
+    }
+    else
+    {
+        do
+        {
+            if(encryptionType == STARTTLS )
+            {
+                socket->connectToHost(host,port);
+
+                if(!socket->waitForConnected(connectionTimeout))
+                {
+                    emit smtpError(ConnectionTimeoutError);
+                    return false;
+                }
+
+                if(!waitForResponse())
+                    return false;
+
+                //220 - <domain> Service ready
+                if(responseCode != 220)
+                {
+                    emit smtpError(ServerError);
+                    return false;
+                }
+
+                sendMessage(EHLO_C + name);
+
+                if(!waitForResponse())
+                    return false;
+
+                //250 - Requested mail action okay, completed
+                if(responseCode != 250)
+                {
+                    emit smtpError(ServerError);
+                    return false;
+                }
+
+                sendMessage(STARTTLS_C);
+
+                if(!waitForResponse())
+                    return false;
+
+                //220 - <domain> Service ready
+                if(responseCode != 220)
+                {
+                    emit smtpError(ServerError);
+                    return false;
+                }
+
+                ((QSslSocket *)socket)->startClientEncryption();
+            }
+            else ((QSslSocket *)socket)->connectToHostEncrypted(host,port);
+
+            if(!((QSslSocket *)socket)->waitForEncrypted(connectionTimeout))
+            {
+                if(socket->error() == QAbstractSocket::SslHandshakeFailedError)
+                {
+                    if(ignoreSslErrors == false)
+                    {
+                        emit smtpError(SslHandshakeError);
+                        return false;
+                    }
+                }
+                else
+                {
+                    emit smtpError(ConnectionTimeoutError);
+                    return false;
+                }
+            }
+            else ignoreSslErrors = false;
+        }while(ignoreSslErrors);
     }
 
-    if(!socket->waitForConnected(connectionTimeout))
+    if(encryptionType != STARTTLS)
     {
-        emit smtpError(ConnectionTimeoutError);
-        return false;
-    }
+        if(!waitForResponse())
+            return false;
 
-    if(!waitForResponse())
-        return false;
-
-    //220 - <domain> Service ready
-    if(responseCode != 220)
-    {
-        emit smtpError(ServerError);
-        return false;
+        //220 - <domain> Service ready
+        if(responseCode != 220)
+        {
+            emit smtpError(ServerError);
+            return false;
+        }
     }
 
     sendMessage(EHLO_C + name);
@@ -81,46 +169,17 @@ bool SmtpClient::connectToHost()
         return false;
     }
 
-    if(encryptionType == STARTTLS)
-    {
-        sendMessage(STARTTLS_C);
-
-        if(!waitForResponse())
-            return false;
-
-        //220 - <domain> Service ready
-        if(responseCode != 220)
-        {
-            emit smtpError(ServerError);
-            return false;
-        }
-
-        ((QSslSocket *)socket)->startClientEncryption();
-
-        if(!((QSslSocket *)socket)->waitForEncrypted(connectionTimeout))
-        {
-            emit smtpError(ConnectionTimeoutError);
-            return false;
-        }
-
-        sendMessage(EHLO_C + name);
-
-        if(!waitForResponse())
-            return false;
-
-        //250 - Requested mail action okay, completed
-        if(responseCode != 250)
-        {
-            emit smtpError(ServerError);
-            return false;
-        }
-    }
-
     return true;
 }
 
 bool SmtpClient::login(const QString &user, const QString &password)
 {
+    if(encryptionType != NONE && !((QSslSocket *)socket)->isEncrypted())
+    {
+        emit smtpError(InsecureConnectionError);
+        return false;
+    }
+
     sendMessage(AUTHP_C + QByteArray().append((char) 0).append(user).append((char) 0).append(password).toBase64());
 
     if(!waitForResponse())
@@ -239,14 +298,7 @@ bool SmtpClient::waitForResponse()
 
             responseCode = responseText.left(3).toInt();
 
-            //4xx - Server errors
-            if(responseCode / 100 == 4)
-                emit smtpError(ServerError);
-            //5xx - Client errors
-            if(responseCode / 100 == 5)
-                emit smtpError(ClientError);
-
-            if(responseText[3] == ' ') { return true; }
+            if(responseText[3] == ' ') return true;
 
         }
     } while(true);
@@ -276,7 +328,6 @@ bool SmtpClient::quit()
             return false;
     }
     socket->abort();
-    writeLog("---END---\n\n");
     return true;
 }
 
@@ -287,9 +338,33 @@ void SmtpClient::connected()
 
 void SmtpClient::errorRecieved(QAbstractSocket::SocketError socketError)
 {
-    writeLog("SocketError[" + QString().number(socketError).toUtf8() + "]: "
-                + socket->errorString().toUtf8() + "\n");
-    emit smtpError(SocketError);
+    writeLog(QString("SocketError[%1]: %2").arg(socketError).arg(socket->errorString()).toUtf8() + "\n");
+    if(socketError != QAbstractSocket::SslHandshakeFailedError && socketError != QAbstractSocket::SocketTimeoutError)
+        emit smtpError(SocketError);
+}
+
+void SmtpClient::errorRecieved(const QList<QSslError>& sslErrors)
+{
+    if(ignoreSslErrors)
+        ((QSslSocket *) socket)->ignoreSslErrors();
+    else
+    {
+        bool flag = false;
+
+        foreach( const QSslError &error, sslErrors )
+        {
+            if(error.error() == QSslError::CertificateUntrusted)
+            {
+                flag = true;
+                break;
+            }
+        }
+
+        if(flag)
+            emit smtpError(UntrustedCertificateError);
+        else
+            emit smtpError(SslHandshakeError);
+    }
 }
 
 void SmtpClient::ready()
@@ -299,7 +374,7 @@ void SmtpClient::ready()
 
 void SmtpClient::disconnected()
 {
-    writeLog("Disconnected.\n");
+    writeLog("Disconnected.\n---END---\n\n");
 }
 
 void SmtpClient::setEncryptionType(EncryptionType et)
@@ -314,5 +389,6 @@ void SmtpClient::setEncryptionType(EncryptionType et)
     case SSL:
         socket = new QSslSocket(this);
         connect(socket,SIGNAL(encrypted()),this,SLOT(ready()));
+        connect(socket,SIGNAL(sslErrors(const QList<QSslError>&)),this,SLOT(errorRecieved(const QList<QSslError>&)));
     }
 }
